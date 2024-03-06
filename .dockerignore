@@ -2,3 +2,4 @@ services
 .git
 .gitignore
 tests/
+run_tests.sh
