@@ -3,7 +3,7 @@
 
 docker-compose --profile test up -d
 
-sleep 5
+sleep 7
 
 go test -v ./tests/
 
