@@ -10,6 +10,7 @@ import (
 
 func main() {
 	database.Init()
+  database.CreateTables()
 
 	mux := http.NewServeMux()
 

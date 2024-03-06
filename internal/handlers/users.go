@@ -1,23 +1,29 @@
 package handlers
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 
-	"golang.org/x/crypto/bcrypt"
-
-	// "github.com/say8hi/go-api-test/internal/database"
+	"github.com/say8hi/go-api-test/internal/database"
 	"github.com/say8hi/go-api-test/internal/models"
 )
 
 func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
-    var user models.CreateUserRequest
-    json.NewDecoder(r.Body).Decode(&user)
-
-    hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
-    if err != nil {
-        return
-    }
-    fmt.Println(hashedPassword)
-    }
+  var request_user models.CreateUserRequest
+  json.NewDecoder(r.Body).Decode(&request_user)
+  
+hash := sha256.Sum256([]byte(*&request_user.Password))
+	hashedPassword := hex.EncodeToString(hash[:])
+  
+  fmt.Println(string(hashedPassword))
+  request_user.Password = string(hashedPassword)
+  user, err := database.CreateUser(request_user)
+  if err != nil {
+      http.Error(w, err.Error(), http.StatusInternalServerError)
+  }
+    
+	json.NewEncoder(w).Encode(user)
+}

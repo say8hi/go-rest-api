@@ -8,6 +8,5 @@ RUN go mod download
 
 COPY . .
 
-RUN go build -o main .
-
-CMD ["./main"]
+RUN go build -o bin/main cmd/go-api-test/main.go
+CMD ["./bin/main"]
