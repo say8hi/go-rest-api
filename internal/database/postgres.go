@@ -39,6 +39,16 @@ func Init() {
 	}
 }
 
+func CloseConnection() {
+	if db != nil {
+		err := db.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println("Соединение с базой данных успешно закрыто")
+	}
+}
+
 func CreateTables() {
 	tables := [4]string{
 		`

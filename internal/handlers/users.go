@@ -15,7 +15,7 @@ func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
   var request_user models.CreateUserRequest
   json.NewDecoder(r.Body).Decode(&request_user)
   
-hash := sha256.Sum256([]byte(*&request_user.Password))
+  hash := sha256.Sum256([]byte(*&request_user.Password))
 	hashedPassword := hex.EncodeToString(hash[:])
   
   fmt.Println(string(hashedPassword))
@@ -25,5 +25,6 @@ hash := sha256.Sum256([]byte(*&request_user.Password))
       http.Error(w, err.Error(), http.StatusInternalServerError)
   }
     
+	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(user)
 }

@@ -15,5 +15,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("POST /users/create", handlers.CreateUserHandler)
-	log.Fatal(http.ListenAndServe(":8080", mux))
+  
+  defer database.CloseConnection()	
+  log.Fatal(http.ListenAndServe(":8080", mux))
 }
