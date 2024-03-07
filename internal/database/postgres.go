@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -17,7 +18,6 @@ var db *sql.DB
 var ErrCreatingProduct = errors.New("error creating product")
 var ErrRollback = errors.New("error deleting product")
 var ErrCategoryDoesntExists = errors.New("error category from categories field doesn't exists")
-
 
 func Init() {
 	dbURL := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
@@ -85,7 +85,7 @@ func CreateTables() {
             product_id INT,
             category_id INT,
             FOREIGN KEY (product_id) REFERENCES products(id),
-            FOREIGN KEY (category_id) REFERENCES categories(id),
+            FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
             PRIMARY KEY (product_id, category_id)
         );
     `,
@@ -104,94 +104,157 @@ func CreateUser(request_user models.CreateUserRequest) (models.UserInDatabase, e
 	var user models.UserInDatabase
 	err := db.QueryRow("INSERT INTO users (username, full_name, password_hash) VALUES($1, $2, $3) RETURNING *",
 		request_user.Username, request_user.FullName, request_user.Password).Scan(&user.ID, &user.Username, &user.FullName, &user.PasswordHash)
-	
-  if err != nil {
+
+	if err != nil {
 		return models.UserInDatabase{}, err
 	}
-	
-  return user, nil
-}
 
+	return user, nil
+}
 
 func GetUserByUsername(username string) (models.UserInDatabase, error) {
 	var user models.UserInDatabase
-	
-  err := db.QueryRow("SELECT * FROM users WHERE username=$1",
+
+	err := db.QueryRow("SELECT * FROM users WHERE username=$1",
 		username).Scan(&user.ID, &user.Username, &user.FullName, &user.PasswordHash)
-	
-  if err != nil {
+
+	if err != nil {
 		return models.UserInDatabase{}, err
 	}
-	
-  return user, nil
-}
 
+	return user, nil
+}
 
 func GetUserByPasswordHash(password string) (models.UserInDatabase, error) {
 	var user models.UserInDatabase
-	
-  err := db.QueryRow("SELECT * FROM users WHERE password_hash=$1",
+
+	err := db.QueryRow("SELECT * FROM users WHERE password_hash=$1",
 		password).Scan(&user.ID, &user.Username, &user.FullName, &user.PasswordHash)
-	
-  if err != nil {
+
+	if err != nil {
 		return models.UserInDatabase{}, err
 	}
-	
-  return user, nil
+
+	return user, nil
 }
 
-// Categories
+// Table Categories
 func CreateCategory(createCategory models.CreateCategoryRequest) (models.Category, error) {
-    var category models.Category
+	var category models.Category
 
-    query := `INSERT INTO categories (name, description) VALUES ($1, $2) RETURNING id, name, description`
-    err := db.QueryRow(query, &createCategory.Name, &createCategory.Description).Scan(&category.ID, &category.Name, &category.Description)
-    if err != nil {
-        return models.Category{}, fmt.Errorf("error creating category: %v", err)
-    }
+	query := `INSERT INTO categories (name, description) VALUES ($1, $2) RETURNING id, name, description`
+	err := db.QueryRow(query, &createCategory.Name, &createCategory.Description).Scan(&category.ID, &category.Name, &category.Description)
+	if err != nil {
+		return models.Category{}, fmt.Errorf("error creating category: %v", err)
+	}
 
-    return category, nil
+	return category, nil
 }
-
 
 func GetCategoryByID(category_id int) (models.Category, error) {
-    var category models.Category
+	var category models.Category
 
-    query := `SELECT * FROM categories WHERE id=$1`
-    err := db.QueryRow(query, category_id).Scan(&category.ID, &category.Name, &category.Description)
-    if err != nil {
-        return models.Category{}, fmt.Errorf("error creating category: %v", err)
-    }
+	query := `SELECT * FROM categories WHERE id=$1`
+	err := db.QueryRow(query, category_id).Scan(&category.ID, &category.Name, &category.Description)
+	if err != nil {
+		return models.Category{}, fmt.Errorf("error creating category: %v", err)
+	}
 
-    return category, nil
+	return category, nil
 }
 
+func GetAllCategories() ([]models.Category, error) {
+	categories := []models.Category{}
+	query := `SELECT * FROM categories ORDER BY id`
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("error creating category: %v", err)
+	}
+	defer rows.Close()
 
-func CreateProduct(productRequest models.CreateProductRequest) (models.Product, error) {  
-  var product models.Product
-  var productId int
-  productQuery := `INSERT INTO products (name, description, price) VALUES ($1, $2, $3) RETURNING id`
-  err := db.QueryRow(productQuery, productRequest.Name, productRequest.Description, productRequest.Price).Scan(&productId)
-  if err != nil {
-      return models.Product{}, ErrCreatingProduct
-  }
+	for rows.Next() {
+		var c models.Category
+		if err := rows.Scan(&c.ID, &c.Name, &c.Description); err != nil {
+			return nil, fmt.Errorf("error scanning category: %w", err)
+		}
+		categories = append(categories, c)
+	}
 
-  for _, categoryId := range productRequest.Categories {
-      _, err := db.Exec(`INSERT INTO product_category (product_id, category_id) VALUES ($1, $2)`, productId, categoryId)
-      if err != nil {
-          _, rollbackErr := db.Exec(`DELETE FROM products WHERE id = $1`, productId)
-          if rollbackErr != nil {
-              return models.Product{}, ErrRollback
-          }
-          return models.Product{}, ErrCategoryDoesntExists
-      }
-  }
-  product, err = GetProduct(productId)
-  if err != nil{
-    return models.Product{}, err
-  }
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating categories: %w", err)
+	}
 
-  return product, nil
+	return categories, nil
+}
+
+func UpdateCategory(categoryID int, updateReq models.CategoryUpdateRequest) error {
+	var setParts []string
+	var args []interface{}
+	var argIndex int = 1
+
+	if updateReq.Name != nil {
+		setParts = append(setParts, fmt.Sprintf("name = $%d", argIndex))
+		args = append(args, *updateReq.Name)
+		argIndex++
+	}
+	if updateReq.Description != nil {
+		setParts = append(setParts, fmt.Sprintf("description = $%d", argIndex))
+		args = append(args, *updateReq.Description)
+		argIndex++
+	}
+
+	if len(setParts) == 0 {
+		return fmt.Errorf("no fields to update")
+	}
+
+	setClause := strings.Join(setParts, ", ")
+	queryString := fmt.Sprintf("UPDATE categories SET %s WHERE id = $%d", setClause, argIndex)
+	args = append(args, categoryID)
+
+	_, err := db.Exec(queryString, args...)
+	if err != nil {
+		return fmt.Errorf("error updating category: %w", err)
+	}
+
+	return nil
+}
+
+func DeleteCategory(categoryID int) error {
+	queryString := "DELETE FROM categories WHERE id = $1"
+	_, err := db.Exec(queryString, categoryID)
+	if err != nil {
+		return fmt.Errorf("error deleting category: %w", err)
+	}
+
+	return nil
+}
+
+// Table Products
+func CreateProduct(productRequest models.CreateProductRequest) (models.Product, error) {
+	var product models.Product
+	var productId int
+	productQuery := `INSERT INTO products (name, description, price) VALUES ($1, $2, $3) RETURNING id`
+	err := db.QueryRow(productQuery, productRequest.Name, productRequest.Description, productRequest.Price).Scan(&productId)
+	if err != nil {
+		return models.Product{}, ErrCreatingProduct
+	}
+
+	for _, categoryId := range productRequest.Categories {
+		_, err := db.Exec(`INSERT INTO product_category (product_id, category_id) VALUES ($1, $2)`, productId, categoryId)
+		if err != nil {
+			_, rollbackErr := db.Exec(`DELETE FROM products WHERE id = $1`, productId)
+			if rollbackErr != nil {
+				return models.Product{}, ErrRollback
+			}
+			return models.Product{}, ErrCategoryDoesntExists
+		}
+	}
+	product, err = GetProduct(productId)
+	if err != nil {
+		return models.Product{}, err
+	}
+
+	return product, nil
 }
 
 func GetProduct(productId int) (models.Product, error) {
@@ -227,4 +290,113 @@ WHERE pc.product_id = $1
 	}
 
 	return product, nil
+}
+
+func GetProductsByCategory(categoryID int) ([]models.Product, error) {
+	query := `
+SELECT p.id, p.name, p.description, p.price
+FROM products p
+JOIN product_category pc ON p.id = pc.product_id
+WHERE pc.category_id = $1
+`
+
+	rows, err := db.Query(query, categoryID)
+	if err != nil {
+		return nil, fmt.Errorf("error querying products by category: %w", err)
+	}
+	defer rows.Close()
+
+	var products []models.Product
+	for rows.Next() {
+		var p models.Product
+		if err := rows.Scan(&p.ID, &p.Name, &p.Description, &p.Price); err != nil {
+			return nil, fmt.Errorf("error scanning product: %w", err)
+		}
+		products = append(products, p)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating products: %w", err)
+	}
+
+	return products, nil
+}
+
+func UpdateProduct(productID int, updateReq models.ProductUpdateRequest) error {
+	var setParts []string
+	var args []interface{}
+	var argIndex int = 1
+
+	if updateReq.Name != nil {
+		setParts = append(setParts, fmt.Sprintf("name = $%d", argIndex))
+		args = append(args, *updateReq.Name)
+		argIndex++
+	}
+	if updateReq.Description != nil {
+		setParts = append(setParts, fmt.Sprintf("description = $%d", argIndex))
+		args = append(args, *updateReq.Description)
+		argIndex++
+	}
+	if updateReq.Price != nil {
+		setParts = append(setParts, fmt.Sprintf("price = $%d", argIndex))
+		args = append(args, *updateReq.Price)
+		argIndex++
+	}
+
+	if len(setParts) == 0 {
+		return fmt.Errorf("no fields to update")
+	}
+
+	setClause := strings.Join(setParts, ", ")
+	queryString := fmt.Sprintf("UPDATE products SET %s WHERE id = $%d", setClause, argIndex)
+	args = append(args, productID)
+	tx, err := db.Begin()
+
+	_, err = tx.Exec(queryString, args...)
+	if err != nil {
+		return fmt.Errorf("error updating category: %w", err)
+	}
+
+	_, err = tx.Exec(`DELETE FROM product_category WHERE product_id = $1`, productID)
+	if err != nil {
+		tx.Rollback()
+		return ErrRollback
+	}
+
+	for _, categoryId := range updateReq.Categories {
+		_, err := tx.Exec(`INSERT INTO product_category (product_id, category_id) VALUES ($1, $2)`, productID, categoryId)
+		if err != nil {
+			tx.Rollback()
+			return ErrCategoryDoesntExists
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return nil
+}
+
+func DeleteProduct(productID int) error {
+	tx, err := db.Begin()
+
+	_, err = tx.Exec(`DELETE FROM product_category WHERE product_id = $1`, productID)
+	if err != nil {
+		tx.Rollback()
+		return ErrRollback
+	}
+
+	_, err = tx.Exec("DELETE FROM products WHERE id = $1", productID)
+	if err != nil {
+		return fmt.Errorf("error deleting product: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return nil
 }

@@ -15,3 +15,10 @@ type CreateProductRequest struct {
     Price       float64  `json:"price"`
     Categories  []int    `json:"categories"`
 }
+
+type ProductUpdateRequest struct {
+    Name        *string   `json:"name,omitempty"`
+    Description *string   `json:"description,omitempty"`
+    Price       *float64  `json:"price,omitempty"`
+    Categories  []int    `json:"categories,omitempty"`
+}

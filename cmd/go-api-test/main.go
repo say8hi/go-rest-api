@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/gorilla/mux"
 	"github.com/say8hi/go-api-test/internal/database"
 	"github.com/say8hi/go-api-test/internal/handlers"
 	"github.com/say8hi/go-api-test/internal/middlewares"
@@ -11,27 +12,36 @@ import (
 
 func main() {
 	database.Init()
-  database.CreateTables()
+	database.CreateTables()
+	r := mux.NewRouter()
+	r.Use(middlewares.LoggingMiddleware)
 
-	mux := http.NewServeMux()
-  
-  // Users
-  mux.HandleFunc("POST /users/create", handlers.CreateUserHandler)
-	
-  // Categories
-  mux.HandleFunc("POST /category/create",
-    func(w http.ResponseWriter, r *http.Request) {
-    middleware := middlewares.AuthMiddleware(http.HandlerFunc(handlers.CreateCategoryHandler))
-    middleware.ServeHTTP(w, r)
-})
+	authRouter := r.NewRoute().Subrouter()
+	authRouter.Use(middlewares.AuthMiddleware)
 
-  // Products
-  mux.HandleFunc("POST /product/create",
-    func(w http.ResponseWriter, r *http.Request) {
-    middleware := middlewares.AuthMiddleware(http.HandlerFunc(handlers.CreateProductHandler))
-    middleware.ServeHTTP(w, r)
-})
-  
-  defer database.CloseConnection()	
-  log.Fatal(http.ListenAndServe(":8080", mux))
+	// Unauthorized endpoints
+	// Users
+	r.HandleFunc("/users/create", handlers.CreateUserHandler).Methods("POST")
+
+	// Categories
+	r.HandleFunc("/category/{id:[0-9]+}", handlers.GetCategoryByIDHandler).Methods("GET")
+	r.HandleFunc("/category/", handlers.GetAllCategoriesHandler).Methods("GET")
+
+	// Products
+	r.HandleFunc("/product/{id:[0-9]+}", handlers.GetProductByIDHandler).Methods("GET")
+	r.HandleFunc("/category/{id:[0-9]+}/products", handlers.GetAllProductsInCategoryHandler).Methods("GET")
+
+	// Authorized endpoints
+	// Categories
+	authRouter.HandleFunc("/category/create", handlers.CreateCategoryHandler).Methods("POST")
+	authRouter.HandleFunc("/category/{id:[0-9]+}", handlers.UpdateCategoryHandler).Methods("PATCH")
+	authRouter.HandleFunc("/category/{id:[0-9]+}", handlers.DeleteCategoryHandler).Methods("DELETE")
+
+	// Products
+	authRouter.HandleFunc("/product/create", handlers.CreateProductHandler).Methods("POST")
+	authRouter.HandleFunc("/product/{id:[0-9]+}", handlers.UpdateProductHandler).Methods("PATCH")
+	authRouter.HandleFunc("/product/{id:[0-9]+}", handlers.DeleteProductHandler).Methods("DELETE")
+
+	defer database.CloseConnection()
+	log.Fatal(http.ListenAndServe(":8080", r))
 }
