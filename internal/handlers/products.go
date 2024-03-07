@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -47,14 +48,14 @@ func GetAllProductsInCategoryHandler(w http.ResponseWriter, r *http.Request) {
       return
   }
 
-  categories, err := database.GetProductsByCategory(categoryID)
+  products, err := database.GetProductsByCategory(categoryID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(categories)
+	json.NewEncoder(w).Encode(products)
 }
 
 func UpdateProductHandler(w http.ResponseWriter, r *http.Request) {
@@ -121,10 +122,13 @@ func GetProductByIDHandler(w http.ResponseWriter, r *http.Request) {
   }
 
   productID, err := strconv.Atoi(idStr)
-  if err != nil {
-      http.Error(w, "Invalid ID format", http.StatusBadRequest)
-      return
-  }
+  if err == sql.ErrNoRows{
+		http.Error(w, "product not found", http.StatusNotFound)
+		return
+  } else if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	product, err := database.GetProduct(productID)
 	if err != nil {

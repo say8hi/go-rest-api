@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -99,7 +100,10 @@ func GetCategoryByIDHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	category, err := database.GetCategoryByID(categoryID)
-	if err != nil {
+  if err == sql.ErrNoRows{
+		http.Error(w, "category not found", http.StatusNotFound)
+		return
+  } else if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
