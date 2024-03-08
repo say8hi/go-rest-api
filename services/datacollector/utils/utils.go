@@ -42,26 +42,23 @@ func publishToRabbitMQ(products []models.Product) {
 		log.Fatalf("Failed to declare a queue: %s", err)
 	}
 
-	for _, product := range products {
-		body, err := json.Marshal(product)
-		if err != nil {
-			log.Printf("Error encoding product: %s", err)
-			continue
-		}
+  body, err := json.Marshal(products)
+  if err != nil {
+      log.Fatalf("Error encoding products: %s", err)
+  }
 
-		err = ch.Publish(
-			"",     // exchange
-			q.Name, // routing key
-			false,  // mandatory
-			false,  // immediate
-			amqp.Publishing{
-				ContentType: "application/json",
-				Body:        body,
-			})
+  err = ch.Publish(
+      "",     // exchange
+      q.Name, // routing key
+      false,  // mandatory
+      false,  // immediate
+      amqp.Publishing{
+          ContentType: "application/json",
+          Body:        body,
+      })
 		if err != nil {
 			log.Fatalf("Failed to publish a message: %s", err)
 		}
-	}
 }
 
 func FetchData() {
