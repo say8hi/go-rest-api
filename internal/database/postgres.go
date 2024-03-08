@@ -60,7 +60,7 @@ func CreateTables() {
 		`
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
-            username TEXT NOT NULL,
+            username TEXT NOT NULL UNIQUE,
             full_name TEXT,
             password_hash TEXT NOT NULL
         );
@@ -68,7 +68,7 @@ func CreateTables() {
 		`
         CREATE TABLE IF NOT EXISTS categories (
             id SERIAL PRIMARY KEY,
-            name VARCHAR(255),
+            name VARCHAR(255) UNIQUE,
             description TEXT
         );
     `,
@@ -231,30 +231,48 @@ func DeleteCategory(categoryID int) error {
 
 // Table Products
 func CreateProduct(productRequest models.CreateProductRequest) (models.Product, error) {
-	var product models.Product
-	var productId int
-	productQuery := `INSERT INTO products (name, description, price) VALUES ($1, $2, $3) RETURNING id`
-	err := db.QueryRow(productQuery, productRequest.Name, productRequest.Description, productRequest.Price).Scan(&productId)
-	if err != nil {
-		return models.Product{}, ErrCreatingProduct
-	}
+    var product models.Product
 
-	for _, categoryId := range productRequest.Categories {
-		_, err := db.Exec(`INSERT INTO product_category (product_id, category_id) VALUES ($1, $2)`, productId, categoryId)
-		if err != nil {
-			_, rollbackErr := db.Exec(`DELETE FROM products WHERE id = $1`, productId)
-			if rollbackErr != nil {
-				return models.Product{}, ErrRollback
-			}
-			return models.Product{}, ErrCategoryDoesntExists
-		}
-	}
-	product, err = GetProduct(productId)
-	if err != nil {
-		return models.Product{}, err
-	}
+    tx, err := db.Begin()
+    if err != nil {
+        return models.Product{}, err
+    }
 
-	return product, nil
+    productQuery := `INSERT INTO products (name, description, price) VALUES ($1, $2, $3) RETURNING id`
+    err = tx.QueryRow(productQuery, productRequest.Name, productRequest.Description, productRequest.Price).Scan(&product.ID)
+    if err != nil {
+        tx.Rollback()
+        return models.Product{}, ErrCreatingProduct
+    }
+
+    var categories []models.Category
+    for _, categoryName := range productRequest.Categories {
+        var category models.Category
+        categoryQuery := `SELECT id, name, description FROM categories WHERE name = $1`
+        err := tx.QueryRow(categoryQuery, categoryName).Scan(&category.ID, &category.Name, &category.Description)
+        if err != nil {
+            tx.Rollback()
+            return models.Product{}, ErrCategoryDoesntExists
+        }
+
+        _, err = tx.Exec(`INSERT INTO product_category (product_id, category_id) VALUES ($1, $2)`, product.ID, category.ID)
+        if err != nil {
+            tx.Rollback()
+            return models.Product{}, ErrCreatingProduct
+        }
+        categories = append(categories, category)
+    }
+
+    if err := tx.Commit(); err != nil {
+        return models.Product{}, err
+    }
+
+    product.Name = productRequest.Name
+    product.Description = productRequest.Description
+    product.Price = productRequest.Price
+    product.Categories = categories
+
+    return product, nil
 }
 
 func GetProduct(productId int) (models.Product, error) {
@@ -351,60 +369,72 @@ ORDER BY p.id, c.id
 }
 
 func UpdateProduct(productID int, updateReq models.ProductUpdateRequest) error {
-	var setParts []string
-	var args []interface{}
-	var argIndex int = 1
+    var setParts []string
+    var args []interface{}
+    var argIndex int = 1
 
-	if updateReq.Name != nil {
-		setParts = append(setParts, fmt.Sprintf("name = $%d", argIndex))
-		args = append(args, *updateReq.Name)
-		argIndex++
-	}
-	if updateReq.Description != nil {
-		setParts = append(setParts, fmt.Sprintf("description = $%d", argIndex))
-		args = append(args, *updateReq.Description)
-		argIndex++
-	}
-	if updateReq.Price != nil {
-		setParts = append(setParts, fmt.Sprintf("price = $%d", argIndex))
-		args = append(args, *updateReq.Price)
-		argIndex++
-	}
+    if updateReq.Name != nil {
+        setParts = append(setParts, fmt.Sprintf("name = $%d", argIndex))
+        args = append(args, *updateReq.Name)
+        argIndex++
+    }
+    if updateReq.Description != nil {
+        setParts = append(setParts, fmt.Sprintf("description = $%d", argIndex))
+        args = append(args, *updateReq.Description)
+        argIndex++
+    }
+    if updateReq.Price != nil {
+        setParts = append(setParts, fmt.Sprintf("price = $%d", argIndex))
+        args = append(args, *updateReq.Price)
+        argIndex++
+    }
 
-	if len(setParts) == 0 {
-		return fmt.Errorf("no fields to update")
-	}
+    if len(setParts) == 0 {
+        return fmt.Errorf("no fields to update")
+    }
 
-	setClause := strings.Join(setParts, ", ")
-	queryString := fmt.Sprintf("UPDATE products SET %s WHERE id = $%d", setClause, argIndex)
-	args = append(args, productID)
-	tx, err := db.Begin()
+    setClause := strings.Join(setParts, ", ")
+    queryString := fmt.Sprintf("UPDATE products SET %s WHERE id = $%d", setClause, argIndex)
+    args = append(args, productID)
 
-	_, err = tx.Exec(queryString, args...)
-	if err != nil {
-		return fmt.Errorf("error updating category: %w", err)
-	}
+    tx, err := db.Begin()
+    if err != nil {
+        return err
+    }
 
-	_, err = tx.Exec(`DELETE FROM product_category WHERE product_id = $1`, productID)
-	if err != nil {
-		tx.Rollback()
-		return ErrRollback
-	}
+    _, err = tx.Exec(queryString, args...)
+    if err != nil {
+        tx.Rollback()
+        return fmt.Errorf("error updating product: %w", err)
+    }
 
-	for _, categoryId := range updateReq.Categories {
-		_, err := tx.Exec(`INSERT INTO product_category (product_id, category_id) VALUES ($1, $2)`, productID, categoryId)
-		if err != nil {
-			tx.Rollback()
-			return ErrCategoryDoesntExists
-		}
-	}
+    _, err = tx.Exec(`DELETE FROM product_category WHERE product_id = $1`, productID)
+    if err != nil {
+        tx.Rollback()
+        return ErrRollback
+    }
 
-	if err := tx.Commit(); err != nil {
-		tx.Rollback()
-		return err
-	}
+    for _, categoryName := range updateReq.Categories {
+        var categoryID int
+        err := tx.QueryRow(`SELECT id FROM categories WHERE name = $1`, categoryName).Scan(&categoryID)
+        if err != nil {
+            tx.Rollback()
+            return ErrCategoryDoesntExists
+        }
 
-	return nil
+        _, err = tx.Exec(`INSERT INTO product_category (product_id, category_id) VALUES ($1, $2)`, productID, categoryID)
+        if err != nil {
+            tx.Rollback()
+            return ErrCreatingProduct
+        }
+    }
+
+    if err := tx.Commit(); err != nil {
+        tx.Rollback()
+        return err
+    }
+
+    return nil
 }
 
 func DeleteProduct(productID int) error {

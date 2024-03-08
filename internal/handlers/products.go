@@ -79,10 +79,12 @@ func UpdateProductHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err = database.UpdateProduct(productID, requestProduct)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if err == database.ErrCategoryDoesntExists {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
-	}
+	} else if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+  }
 
   response := models.GeneralResponse{
       Status:  "success",

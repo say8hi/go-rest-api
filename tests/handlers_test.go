@@ -83,7 +83,7 @@ func TestCategoryFlow_E2E(t *testing.T) {
 	})
 
 	t.Run("Get all categories", func(t *testing.T) {
-		_ = createCategory("testcategory", "desc")
+		_ = createCategory("testcategory2", "desc")
 		resp, _ := http.Get(serverURL + "/category/")
 		defer resp.Body.Close()
 
@@ -91,7 +91,7 @@ func TestCategoryFlow_E2E(t *testing.T) {
 		err := json.NewDecoder(resp.Body).Decode(&responseBody)
 		assert.NoError(t, err)
 		assert.Equal(t, []models.Category{{ID: 1, Name: "testcategory", Description: "desc"},
-			{ID: 2, Name: "testcategory", Description: "desc"}}, responseBody)
+			{ID: 2, Name: "testcategory2", Description: "desc"}}, responseBody)
 	})
 
 	t.Run("Update category", func(t *testing.T) {
@@ -130,6 +130,17 @@ func TestCategoryFlow_E2E(t *testing.T) {
 
 		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 	})
+
+	t.Run("Get all categories2", func(t *testing.T) {
+		resp, _ := http.Get(serverURL + "/category/")
+		defer resp.Body.Close()
+
+		var responseBody []models.Category
+		err := json.NewDecoder(resp.Body).Decode(&responseBody)
+		assert.NoError(t, err)
+		assert.Equal(t, []models.Category{{ID: 1, Name: "new_test_name", Description: "new_test_desc"},
+			{ID: 2, Name: "testcategory2", Description: "desc"}}, responseBody)
+	})
 }
 
 func TestProductFlow_E2E(t *testing.T) {
@@ -141,7 +152,7 @@ func TestProductFlow_E2E(t *testing.T) {
 		return client.Do(req)
 	}
 
-	createProduct := func(name, description string, price float64, categories []int) models.Product {
+	createProduct := func(name, description string, price float64, categories []string) models.Product {
 		requestBody := models.CreateProductRequest{
 			Name:        name,
 			Description: description,
@@ -157,7 +168,7 @@ func TestProductFlow_E2E(t *testing.T) {
 		return responseBody
 	}
 
-	createdProduct := createProduct("testproduct", "desc", 9.99, []int{1, 2})
+	createdProduct := createProduct("testproduct", "desc", 9.99, []string{"new_test_name", "testcategory2"})
 
 	t.Run("Create product", func(t *testing.T) {
 		assert.Equal(t, models.Product{
@@ -167,7 +178,7 @@ func TestProductFlow_E2E(t *testing.T) {
 			Price:       9.99,
 			Categories: []models.Category{
 				{ID: 1, Name: "new_test_name", Description: "new_test_desc"},
-				{ID: 2, Name: "testcategory", Description: "desc"},
+				{ID: 2, Name: "testcategory2", Description: "desc"},
 			},
 		},
 			createdProduct)
@@ -187,14 +198,14 @@ func TestProductFlow_E2E(t *testing.T) {
 			Price:       9.99,
 			Categories: []models.Category{
 				{ID: 1, Name: "new_test_name", Description: "new_test_desc"},
-				{ID: 2, Name: "testcategory", Description: "desc"},
+				{ID: 2, Name: "testcategory2", Description: "desc"},
 			},
 		},
 			responseBody)
 	})
 
 	t.Run("Get all products in category", func(t *testing.T) {
-		_ = createProduct("second", "desc", 5.5, []int{1})
+		_ = createProduct("second", "desc", 5.5, []string{"new_test_name"})
 
 		resp, _ := http.Get(serverURL + "/category/1/products")
 		defer resp.Body.Close()
@@ -229,20 +240,27 @@ func TestProductFlow_E2E(t *testing.T) {
 		newName := "new_test_name"
 		newDescription := "new_test_desc"
 		newPrice := 10.99
-		updatedRequestBody := models.ProductUpdateRequest{
-			Name:        &newName,
-			Description: &newDescription,
-			Price:       &newPrice,
-			Categories:  []int{1},
+		updatedRequestBody := models.CreateProductRequest{
+			Name:        "new_test_name",
+			Description: "new_test_desc",
+			Price:       10.99,
+			Categories:  []string{"new_test_name"},
 		}
 		jsonData, _ := json.Marshal(updatedRequestBody)
-		_, _ = sendRequest(http.MethodPatch, serverURL+"/product/"+strconv.Itoa(createdProduct.ID), jsonData)
+		resp, _ := sendRequest(http.MethodPatch, serverURL+"/product/"+strconv.Itoa(createdProduct.ID), jsonData)
 
-		resp, _ := http.Get(serverURL + "/product/" + strconv.Itoa(createdProduct.ID))
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var deleteResponse map[string]string
+		err := json.NewDecoder(resp.Body).Decode(&deleteResponse)
+		assert.NoError(t, err)
+		assert.Equal(t, "Product updated successfully", deleteResponse["message"])
+
+		resp, _ = http.Get(serverURL + "/product/" + strconv.Itoa(createdProduct.ID))
 		defer resp.Body.Close()
 
 		var updatedProduct models.Product
-		err := json.NewDecoder(resp.Body).Decode(&updatedProduct)
+		err = json.NewDecoder(resp.Body).Decode(&updatedProduct)
 		assert.NoError(t, err)
 		assert.Equal(t, newName, updatedProduct.Name)
 		assert.Equal(t, newDescription, updatedProduct.Description)

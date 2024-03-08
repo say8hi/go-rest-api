@@ -1,9 +1,11 @@
 package handlers
+
 import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gorilla/mux"
 	"github.com/say8hi/go-api-test/internal/database"
@@ -19,10 +21,13 @@ func CreateCategoryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	createdCategory, err := database.CreateCategory(requestCategory)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+  if err != nil && strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
+      http.Error(w, "This category name is already exist.", http.StatusBadRequest)
+    return
+  } else if err != nil{
+      http.Error(w, "Database error.", http.StatusInternalServerError)
+    return
+  }
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(createdCategory)
