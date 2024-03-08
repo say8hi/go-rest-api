@@ -37,10 +37,10 @@ func Init() {
 	for i := 0; i < 10; i++ {
 		err = db.Ping()
 		if err == nil {
-			fmt.Println("Соединение с базой данных успешно установлено")
+			fmt.Println("Successfully connected to database")
 			return
 		}
-		fmt.Printf("Не удалось подключиться к базе данных: %v. Повторная попытка через 1 секунду\n", err)
+		fmt.Printf("Couldn't connect to databse: %v. Retry in 1 second.\n", err)
 		time.Sleep(1 * time.Second)
 	}
 }
@@ -263,19 +263,21 @@ func GetProduct(productId int) (models.Product, error) {
 	productQuery := `SELECT id, name, description, price FROM products WHERE id = $1`
 	err := db.QueryRow(productQuery, productId).Scan(&product.ID, &product.Name, &product.Description, &product.Price)
 	if err != nil {
-		return models.Product{}, fmt.Errorf("error fetching product: %v", err)
+		return models.Product{}, err
 	}
 
 	categoriesQuery := `
 SELECT c.id, c.name, c.description
 FROM categories c
 INNER JOIN product_category pc ON c.id = pc.category_id
-WHERE pc.product_id = $1
+WHERE pc.product_id = $1 ORDER BY c.id ASC
 `
 	rows, err := db.Query(categoriesQuery, productId)
-	if err != nil {
-		return models.Product{}, fmt.Errorf("error fetching categories for product: %v", err)
-	}
+	if err == sql.ErrNoRows {
+		return product, nil
+	} else if err != nil {
+    return product, fmt.Errorf("error fetching categories for product: %v", err)
+  }
 	defer rows.Close()
 
 	for rows.Next() {
@@ -294,29 +296,55 @@ WHERE pc.product_id = $1
 
 func GetProductsByCategory(categoryID int) ([]models.Product, error) {
 	query := `
-SELECT p.id, p.name, p.description, p.price
+SELECT p.id, p.name, p.description, p.price, c.id, c.name, c.description
 FROM products p
 JOIN product_category pc ON p.id = pc.product_id
+JOIN categories c ON pc.category_id = c.id
 WHERE pc.category_id = $1
+ORDER BY p.id, c.id
 `
-
 	rows, err := db.Query(query, categoryID)
 	if err != nil {
-		return nil, fmt.Errorf("error querying products by category: %w", err)
+		return nil, fmt.Errorf("error querying products by category: %v", err)
 	}
 	defer rows.Close()
 
-	var products []models.Product
+	productsMap := make(map[int]*models.Product)
 	for rows.Next() {
-		var p models.Product
-		if err := rows.Scan(&p.ID, &p.Name, &p.Description, &p.Price); err != nil {
-			return nil, fmt.Errorf("error scanning product: %w", err)
+		var (
+			prodID, catID   int
+			prodName, prodDescription string
+			prodPrice       float64
+			catName, catDescription string
+		)
+		if err := rows.Scan(&prodID, &prodName, &prodDescription, &prodPrice, &catID, &catName, &catDescription); err != nil {
+			return nil, fmt.Errorf("error scanning product and category: %v", err)
 		}
-		products = append(products, p)
+
+		if _, exists := productsMap[prodID]; !exists {
+			productsMap[prodID] = &models.Product{
+				ID:          prodID,
+				Name:        prodName,
+				Description: prodDescription,
+				Price:       prodPrice,
+				Categories:  []models.Category{},
+			}
+		}
+
+		productsMap[prodID].Categories = append(productsMap[prodID].Categories, models.Category{
+			ID:          catID,
+			Name:        catName,
+			Description: catDescription,
+		})
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating products: %w", err)
+		return nil, fmt.Errorf("error iterating products and categories: %v", err)
+	}
+
+	products := make([]models.Product, 0, len(productsMap))
+	for _, product := range productsMap {
+		products = append(products, *product)
 	}
 
 	return products, nil

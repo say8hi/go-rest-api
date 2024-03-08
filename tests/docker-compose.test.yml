@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  test_app:
+    build:
+      context: ../
+      dockerfile: ./Dockerfile
+    container_name: test-api-app
+    restart: on-failure
+    ports:
+      - "8081:8080"
+    depends_on:
+      - test_postgres
+    environment:
+      DB_NAME: test_db_name
+      DB_USER: test_db_user
+      DB_PASSWORD: test_db_pass
+      DB_HOST: test_postgres
+      DB_PORT: 5432
+
+  test_postgres:
+    image: postgres:latest
+    container_name: test-api-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: test_db_name
+      POSTGRES_USER: test_db_user
+      POSTGRES_PASSWORD: test_db_pass
+    volumes:
+      - test_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+
+volumes:
+  test_postgres_data:

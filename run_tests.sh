@@ -1,8 +1,8 @@
 #!/bin/bash
 
-docker-compose --profile test up -d
+docker-compose -f tests/docker-compose.test.yml up -d
 
-sleep 7
+sleep 10
 
 go test -v ./tests/
 TEST_STATUS=$?

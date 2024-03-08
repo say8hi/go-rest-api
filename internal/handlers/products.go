@@ -144,15 +144,15 @@ func GetProductByIDHandler(w http.ResponseWriter, r *http.Request) {
 
   productID, err := strconv.Atoi(idStr)
   if err == sql.ErrNoRows{
-		http.Error(w, "product not found", http.StatusNotFound)
-		return
-  } else if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	product, err := database.GetProduct(productID)
-	if err != nil {
+  if err == sql.ErrNoRows{
+		http.Error(w, "product not found", http.StatusNotFound)
+		return
+  } else if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
