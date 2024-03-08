@@ -157,7 +157,7 @@ func GetCategoryByID(category_id int) (models.Category, error) {
 	query := `SELECT * FROM categories WHERE id=$1`
 	err := db.QueryRow(query, category_id).Scan(&category.ID, &category.Name, &category.Description)
 	if err != nil {
-		return models.Category{}, fmt.Errorf("error creating category: %v", err)
+		return models.Category{}, err
 	}
 
 	return category, nil

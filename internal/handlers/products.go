@@ -3,7 +3,6 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 
@@ -85,8 +84,19 @@ func UpdateProductHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+  response := models.GeneralResponse{
+      Status:  "success",
+      Message: "Product updated successfully",
+  }
+
+  jsonResponse, err := json.Marshal(response)
+  if err != nil {
+      http.Error(w, err.Error(), http.StatusInternalServerError)
+      return
+  }
+
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintln(w, "Product updated successfully")
+  w.Write(jsonResponse)
 }
 
 func DeleteProductHandler(w http.ResponseWriter, r *http.Request) {
@@ -109,8 +119,19 @@ func DeleteProductHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+  response := models.GeneralResponse{
+      Status:  "success",
+      Message: "Product deleted successfully",
+  }
+
+  jsonResponse, err := json.Marshal(response)
+  if err != nil {
+      http.Error(w, err.Error(), http.StatusInternalServerError)
+      return
+  }
+
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintln(w, "Product deleted successfully")
+  w.Write(jsonResponse)
 }
 
 func GetProductByIDHandler(w http.ResponseWriter, r *http.Request) {

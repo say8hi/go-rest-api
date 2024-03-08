@@ -1,9 +1,7 @@
 package handlers
-
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 
@@ -57,8 +55,19 @@ func UpdateCategoryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+  response := models.GeneralResponse{
+      Status:  "success",
+      Message: "Category updated successfully",
+  }
+
+  jsonResponse, err := json.Marshal(response)
+  if err != nil {
+      http.Error(w, err.Error(), http.StatusInternalServerError)
+      return
+  }
+
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintln(w, "Category updated successfully")
+  w.Write(jsonResponse)
 }
 
 func DeleteCategoryHandler(w http.ResponseWriter, r *http.Request) {
@@ -81,8 +90,19 @@ func DeleteCategoryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+  response := models.GeneralResponse{
+      Status:  "success",
+      Message: "Category deleted successfully",
+  }
+
+  jsonResponse, err := json.Marshal(response)
+  if err != nil {
+      http.Error(w, err.Error(), http.StatusInternalServerError)
+      return
+  }
+
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintln(w, "Category deleted successfully")
+  w.Write(jsonResponse)
 }
 
 func GetCategoryByIDHandler(w http.ResponseWriter, r *http.Request) {
