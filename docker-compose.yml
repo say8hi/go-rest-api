@@ -13,6 +13,20 @@ services:
     env_file:
       - .env
 
+  datacollector:
+    build:
+      context: ./services/datacollector/
+      dockerfile: Dockerfile
+    restart: on-failure
+    depends_on:
+      - rabbitmq
+      - app
+    environment:
+      RMQ_USER: ${RMQ_USER}
+      RMQ_PASSWORD: ${RMQ_PASSWORD}
+      RMQ_HOST: ${RMQ_HOST}
+      RMQ_PORT: ${RMQ_PORT}
+
   postgres:
     image: postgres:latest
     restart: always
@@ -25,5 +39,18 @@ services:
     ports:
       - "5432:5432"
 
+  rabbitmq: 
+    image: rabbitmq:3-management
+    restart: always
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RMQ_PASSWORD}
+    ports:
+      - "5672:5672" # amqp
+      - "15672:15672" # Web
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
 volumes:
   postgres_data:
+  rabbitmq_data:

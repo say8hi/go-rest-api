@@ -2,11 +2,18 @@ FROM golang:latest AS builder
 
 WORKDIR /app
 
-COPY go.mod ./
-COPY go.sum ./
+COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o bin/main cmd/go-api-test/main.go
 
-RUN go build -o bin/main cmd/go-api-test/main.go
-CMD ["./bin/main"]
+FROM alpine:latest
+
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /root/
+
+COPY --from=builder /app/bin/main .
+
+CMD ["./main"]

@@ -8,11 +8,17 @@ import (
 	"github.com/say8hi/go-api-test/internal/database"
 	"github.com/say8hi/go-api-test/internal/handlers"
 	"github.com/say8hi/go-api-test/internal/middlewares"
+	"github.com/say8hi/go-api-test/internal/rabbitmq"
 )
 
 func main() {
 	database.Init()
 	database.CreateTables()
+  defer database.CloseConnection()
+  
+  rabbitMQChannel := rabbitmq.InitRabbitMQ()
+  defer rabbitMQChannel.Close()
+
 	r := mux.NewRouter()
 	r.Use(middlewares.LoggingMiddleware)
 
@@ -41,7 +47,7 @@ func main() {
 	authRouter.HandleFunc("/product/create", handlers.CreateProductHandler).Methods("POST")
 	authRouter.HandleFunc("/product/{id:[0-9]+}", handlers.UpdateProductHandler).Methods("PATCH")
 	authRouter.HandleFunc("/product/{id:[0-9]+}", handlers.DeleteProductHandler).Methods("DELETE")
-
-	defer database.CloseConnection()
+  
+  go rabbitmq.ConsumeMessages(rabbitMQChannel, "queue_from_datacollector")
 	log.Fatal(http.ListenAndServe(":8080", r))
 }
