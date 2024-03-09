@@ -9,6 +9,7 @@ import (
 
 	"github.com/say8hi/go-api-test/internal/database"
 	"github.com/say8hi/go-api-test/internal/models"
+	"github.com/say8hi/go-api-test/internal/utils"
 )
 
 // Users
@@ -16,7 +17,7 @@ func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
   var request_user models.CreateUserRequest
   err := json.NewDecoder(r.Body).Decode(&request_user)
   if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		utils.SendJSONError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
   
@@ -26,10 +27,10 @@ func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
   request_user.Password = string(hashedPassword)
   user, err := database.CreateUser(request_user)
   if err != nil && strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
-      http.Error(w, "This username is already taken.", http.StatusBadRequest)
+      utils.SendJSONError(w, "This username is already taken.", http.StatusBadRequest)
       return
   } else if err != nil{
-      http.Error(w, "Database error.", http.StatusInternalServerError)
+      utils.SendJSONError(w, "Database error.", http.StatusInternalServerError)
       return
   }
     
