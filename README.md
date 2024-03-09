@@ -21,6 +21,22 @@ The project is organized as follows:
 - **RabbitMQ**: For asynchronous message queuing.
 - **Gorilla Mux**: A powerful URL router and dispatcher for matching incoming requests to their respective handler.
 
+## Authentication Method
+
+The application utilizes an authentication mechanism that employs a combination of the username and password, concatenated in the format "passwordusername", and then hashed using the SHA-256 algorithm. This approach ensures enhanced security by storing only hashed versions of the credentials, thereby protecting sensitive user information.
+
+### Hashing Utility
+
+For convenience, the application includes a hashing utility script located in the `utils/` directory, named `hashcli.go`. This script allows for easy generation of SHA-256 hashes of arbitrary strings, adhering to the application's authentication format.
+
+#### Usage
+
+To hash a string, such as a concatenated password and username, use the following command with the compiled binary:
+
+```bash
+bin/hashcli -s "passwordusername"
+```
+
 ## Setup and Running
 
 To run this project, you need to have Docker and Docker Compose installed on your system. Follow these steps:
