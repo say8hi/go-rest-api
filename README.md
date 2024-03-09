@@ -29,7 +29,14 @@ To run this project, you need to have Docker and Docker Compose installed on you
 ```bash
 git clone https://github.com/say8hi/go-api-test.git
 ```
+2. Go into **go-api-test** folder:
+```bash
+cd go-api-test
+```
 3. Rename `.env.example` to `.env` and adjust the configuration according to your environment.
+```bash
+mv .env.example .env
+```
 4. Build and start the services with Docker Compose:
 ```bash
 docker-compose up -d --build
