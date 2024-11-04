@@ -1,4 +1,5 @@
 # Go API Project
+![Logo](./logo.webp)
 
 This repository contains a Go-based API project that demonstrates a structured approach to building a Go application using various technologies such as Docker, PostgreSQL, RabbitMQ, and testing strategies. The project is structured to support scalability and maintainability.
 
